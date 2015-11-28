@@ -239,7 +239,6 @@ ERROR_T BTreeIndex::LookupOrUpdateInternal(const SIZE_T &node,
 	  return b.GetVal(offset,value);
 	} else { 
 	  // BTREE_OP_UPDATE
-	  // WRITE ME
 	  rc = b.SetVal(offset,value);
 	  if (rc) { return rc; }
 	  rc = b.Serialize(buffercache, node);
@@ -367,7 +366,6 @@ ERROR_T BTreeIndex::Update(const KEY_T &key, const VALUE_T &value)
 {
   VALUE_T v = value;
   return LookupOrUpdateInternal(superblock.info.rootnode, BTREE_OP_UPDATE, key, v);
-  // WRITE ME
   //return ERROR_UNIMPL;
 }
 
@@ -470,7 +468,7 @@ ERROR_T BTreeIndex::SanityCheck() const
 
 ostream & BTreeIndex::Print(ostream &os) const
 {
-  // WRITE ME
+  Display(os, BTREE_DEPTH_DOT);
   return os;
 }
 
