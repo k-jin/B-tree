@@ -359,6 +359,17 @@ ERROR_T BTreeIndex::Lookup(const KEY_T &key, VALUE_T &value)
 ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
 {
   // WRITE ME
+  // 1. Find the leaf node to which X should be added
+  // 2. Add X to this node in the appropriate place among the values already present
+  // 3a. If there are <= M-1 values in the node after adding X then we are done
+  // 3b. If there are M nodes after adding X, split the node into three parts
+  // 	i) Left - the first (M-1)/2 values
+  // 	ii) Middle - the middle value (pos 1+((M-1)/2))
+  // 	iii) Right - the last (M-1)/2 values
+  // 	Left and Right have just enough values to be made into individual nodes (become left and right child of Middle)
+  // 	Middle is added to the appropriate place in this node's parent
+  // 	Continue these steps until no overflow occurs
+  
   return ERROR_UNIMPL;
 }
   
