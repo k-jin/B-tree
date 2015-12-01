@@ -1,0 +1,5 @@
+INIT 4 4
+LOOKUP ub0t  # should fail
+LOOKUP y4ni  # should fail
+INSERT ilrw k2fc  # should succeed
+DEINIT

@@ -1,6 +1,5 @@
 #include <assert.h>
 #include "btree.h"
-using namespace std;
 
 KeyValuePair::KeyValuePair()
 {}
@@ -265,7 +264,7 @@ static ERROR_T PrintNode(ostream &os, SIZE_T nodenum, BTreeNode &b, BTreeDisplay
   KEY_T key;
   VALUE_T value;
   SIZE_T ptr;
-  SIZE_T offset;
+  SIZE_T offset;
   ERROR_T rc;
   unsigned i;
 
@@ -359,159 +358,30 @@ ERROR_T BTreeIndex::Lookup(const KEY_T &key, VALUE_T &value)
 
 ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
 {
+
+   rc =  Lookup(key, value);
+
+   if (rc != ERROR_NOERROR) {return rc;}
   // WRITE ME
-  // 1) Initilize x as root
-  // 2) While x is not leaf
-  // 	a) Find the child of x to traverse next. Let this by y.
-  // 	b) If y is not full, change x to point to y
-  // 	c) If y is full, split it and change x to point to one of the two parts of y. If k < mid key of y, set x as first part of y. Else, set x as second part of y. When we split y, we move mid key from y to its parent x.
-  // 3) Repeat loop 2) until x is a leaf. Insert k to x.
-
-  VALUE_T val;
-
-  ERROR_T rc = LookupOrUpdateInternal(superblock.info.rootnode, BTREE_OP_LOOKUP, key, val);
-
-  switch(rc){
-    case ERROR_NOERROR:
-      //value found and updated successfully, no need to insert duplicate
-      return ERROR_INSERT;
-    case ERROR_NONEXISTENT:
-      //this is the error we want, can now start insert
-      if (rc) { return rc; } 
-      // find leaf to insert into
-
-      // Step 1. Initialize x as root => Start InsertHelper at the root node
-      rc = InsertHelper(superblock.info.rootnode, key, value);
-      if (rc) { return rc; }
-  }
-
+  // 1. Find the leaf node to which X should be added
+  // 2. Add X to this node in the appropriate place among the values already present
+  // 3a. If there are <= M-1 values in the node after adding X then we are done
+  // 3b. If there are M nodes after adding X, split the node into three parts
+  // 	i) Left - the first (M-1)/2 values
+  // 	ii) Middle - the middle value (pos 1+((M-1)/2))
+  // 	iii) Right - the last (M-1)/2 values
+  // 	Left and Right have just enough values to be made into individual nodes (become left and right child of Middle)
+  // 	Middle is added to the appropriate place in this node's parent
+  // 	Continue these steps until no overflow occurs
+  
+  return ERROR_UNIMPL;
 }
-
- 
-ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, VALUE_T &value)
-{
-  BTreeNode b;
-  ERROR_T rc;
-  SIZE_T offset;
-  KEY_T testkey;
-  SIZE_T ptr;
-
-  rc = b.Unserialize(buffercache,node);
-
-  if (rc!=ERROR_NOERROR) { 
-    return rc;
-  }
-
-  switch (b.info.nodetype) { 
-  case BTREE_ROOT_NODE:
-  case BTREE_INTERIOR_NODE:
-    // Scan through key/ptr pairs
-    // and recurse if possible
-    for (offset=0;offset<b.info.numkeys;offset++) { 
-      rc=b.GetKey(offset,testkey);
-      if (rc) {  return rc; }
-      if (key<testkey || key==testkey) {
-	// OK, so we now have the first key that's larger
-	// so we need to recurse on the ptr immediately previous to 
-	// this one, if it exists
-
-        // 2a. FIND CHILD OF X, CALLED Y, TO TRAVERSE NEXT
-	rc=b.GetPtr(offset,ptr);
-	if (rc) { return rc; }
-        // 2b. CHECK IF Y is FULL
-        if (b.info.GetNumSlotsAsLeaf() == 0){
-          //y is full, split it
-          //SPLIT LEAF HERE
-        }
-        else{
-          // Otherwise, change x to point to y
-	  return InsertHelper(ptr,key,value);
-        }
-        
-
-      }
-    }
-    // if we got here, we need to go to the next pointer, if it exists
-    if (b.info.numkeys>0) { 
-      rc=b.GetPtr(b.info.numkeys,ptr);
-      if (rc) { return rc; }
-      return InsertHelper(ptr,key,value);
-    } else {
-      // There are no keys at all on this node, so nowhere to go
-      // Add k here
-      return ERROR_NOERROR;
-    }
-    break;
-  case BTREE_LEAF_NODE:
-    // 3) Repeat loop 2) until x is a leaf. Insert k to x.
-    // INSERT K HERE
-    return ERROR_NOERROR;
-    break;
-  default:
-    // We can't be looking at anything other than a root, internal, or leaf
-    return ERROR_INSANE;
-    break;
-  }  
-
-  return ERROR_INSANE;
-}
-
-ERROR_T SplitNode (BTreeNode &lhs, BTreeNode &rhs) {
-	BTreeNode lhs-static = lhs;
-	BTreeNode rhs = new BTreeNode(lhs-static);
-	SIZE_T n;
-	ERROR_T rc;
-	rc = AllocateNode(n);
-	if (rc != ERROR_NOERROR) { 
-	   return rc;
-	}
-	switch (lhs-static.info.nodetype) {
-  	  case BTREE_ROOT_NODE:
-	  case BTREE_INTERIOR_NODE:
-	    // number of total slots (available + filled)	  
-	    int length =  lhs-static.info.numkeys; 
-	    list<KEY_T> keys[] = lhs-static.data;
-	    int middle_key_index = keys[length/2];
-	    // clear node data and initialize to array of length length
-	    lhs.data = [length]; 
-	    // same
-	    rhs.data = [length]; 
-	    lhs.numkey = length/2;
-	    rhs.numkey = length/2;
-	    for (int i = 0; i < length/2; i++) {
-		lhs.data[i] = keys[i];
-		rhs.data[i] = keys[length/2 + i];
-  	    }
-	    rhs.data[length/2 + 1] = keys[length - 1];
-	    // Insert middle key index into parent node
-	    break; 
-	  case BTREE_LEAF_NODE:
-	    int length =  lhs-static.info.numkeys;
-	    list<KeyValuePair> keyVals [] = lhs-static.data;
-	    int middle_key = keyVals[length/2];
-	    lhs.data = [length];
-	    rhs.data = [length];
-	    for (int i = 0; i < length/2; i++) {
-	       	lhs.data[i] = keyVals[i];
-		rhs.data[i] = keyVals[length/2 + i];
-	    } 
-	    rhs.data[length/2 + 1] = keys[length - 1];
-	    lhs.numkey = length/2;
-	    rhs.numkey = length/2;
-	    // Insert middle key index into parent node
-	     break;
-          default:
-	    return ERROR_INSANE;
-	    break;
-	}
-	rc = rhs.Serialize(buffercache, n);
-	if (rc != ERROR_NOERROR) { return rc;}
-}
-
+  
 ERROR_T BTreeIndex::Update(const KEY_T &key, const VALUE_T &value)
 {
   VALUE_T v = value;
   return LookupOrUpdateInternal(superblock.info.rootnode, BTREE_OP_UPDATE, key, v);
+  //return ERROR_UNIMPL;
 }
 
   
