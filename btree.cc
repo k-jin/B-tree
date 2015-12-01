@@ -377,19 +377,18 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
       return ERROR_INSERT;
     case ERROR_NONEXISTENT:
       //this is the error we want, can now start insert
-      BTreeNode root;
-      SIZE_T rootPtr = superblock.info.rootnode;
-      rc = root.Unserialize(buffercache, rootPtr);
       if (rc) { return rc; } 
       // find leaf to insert into
-      rc = LookupForInsert(rootPtr, key);
-      
+
+      // Step 1. Initialize x as root => Start InsertHelper at the root node
+      rc = InsertHelper(superblock.info.rootnode, key, value);
+      if (rc) { return rc; }
   }
 
 }
 
  
-ERROR_T BTreeIndex::LookupForInsert(const SIZE_T &node, const KEY_T &key)
+ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, VALUE_T &value)
 {
   BTreeNode b;
   ERROR_T rc;
@@ -407,7 +406,7 @@ ERROR_T BTreeIndex::LookupForInsert(const SIZE_T &node, const KEY_T &key)
   case BTREE_ROOT_NODE:
   case BTREE_INTERIOR_NODE:
     // Scan through key/ptr pairs
-    //and recurse if possible
+    // and recurse if possible
     for (offset=0;offset<b.info.numkeys;offset++) { 
       rc=b.GetKey(offset,testkey);
       if (rc) {  return rc; }
@@ -415,22 +414,37 @@ ERROR_T BTreeIndex::LookupForInsert(const SIZE_T &node, const KEY_T &key)
 	// OK, so we now have the first key that's larger
 	// so we need to recurse on the ptr immediately previous to 
 	// this one, if it exists
+
+        // 2a. FIND CHILD OF X, CALLED Y, TO TRAVERSE NEXT
 	rc=b.GetPtr(offset,ptr);
 	if (rc) { return rc; }
-	return LookupForInsert(ptr,key);
+        // 2b. CHECK IF Y is FULL
+        if (b.info.GetNumSlotsAsLeaf() == 0){
+          //y is full, split it
+          //SPLIT LEAF HERE
+        }
+        else{
+          // Otherwise, change x to point to y
+	  return InsertHelper(ptr,key,value);
+        }
+        
+
       }
     }
     // if we got here, we need to go to the next pointer, if it exists
     if (b.info.numkeys>0) { 
       rc=b.GetPtr(b.info.numkeys,ptr);
       if (rc) { return rc; }
-      return LookupForInsert(ptr,key);
+      return InsertHelper(ptr,key,value);
     } else {
       // There are no keys at all on this node, so nowhere to go
+      // Add k here
       return ERROR_NOERROR;
     }
     break;
   case BTREE_LEAF_NODE:
+    // 3) Repeat loop 2) until x is a leaf. Insert k to x.
+    // INSERT K HERE
     return ERROR_NOERROR;
     break;
   default:
