@@ -396,6 +396,9 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, VALUE_T &
   KEY_T testkey;
   SIZE_T ptr;
 
+  SIZE_T newnode;
+  KEY_T splitkey;
+
   rc = b.Unserialize(buffercache,node);
 
   if (rc!=ERROR_NOERROR) { 
@@ -415,37 +418,42 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, VALUE_T &
 	// so we need to recurse on the ptr immediately previous to 
 	// this one, if it exists
 
-        // 2a. FIND CHILD OF X, CALLED Y, TO TRAVERSE NEXT
 	rc=b.GetPtr(offset,ptr);
 	if (rc) { return rc; }
-        // 2b. CHECK IF Y is FULL
-        if (b.info.GetNumSlotsAsLeaf() == 0){
-          //y is full, split it
-          //SPLIT LEAF HERE
-        }
-        else{
-          // Otherwise, change x to point to y
-	  return InsertHelper(ptr,key,value);
-        }
-        
+         
+        //call recursively
+	rc = InsertHelper(ptr,key,value);
+        if (rc) { return rc; }
 
+        //check to see if this node is full
+        if(NodeFull(ptr)){
+          //if it is, split it
+	  rc = SplitNode(ptr, splitkey, newnode);
+          if (rc) { return rc; }
+	  return InsertKeyVal(node, splitkey, VALUE_T(), newnode);
+        }
+        else { return rc; }
       }
     }
     // if we got here, we need to go to the next pointer, if it exists
     if (b.info.numkeys>0) { 
+      //same process as before
       rc=b.GetPtr(b.info.numkeys,ptr);
       if (rc) { return rc; }
-      return InsertHelper(ptr,key,value);
+      rc = InsertHelper(ptr,key,value);
+      if (rc) { return rc; }
+
+      if(NodeFull(ptr)){ 
+        rc = SplitNode(ptr, splitkey, newnode);
+        if (rc) { return rc; }
+        return InsertKeyVal(node, splitkey, VALUE_T(), newnode);
+      }
     } else {
-      // There are no keys at all on this node, so nowhere to go
-      // Add k here
-      return ERROR_NOERROR;
+        return rc;
     }
     break;
   case BTREE_LEAF_NODE:
-    // 3) Repeat loop 2) until x is a leaf. Insert k to x.
-    // INSERT K HERE
-    return ERROR_NOERROR;
+    return InsertKeyVal(node, key, value, 0);
     break;
   default:
     // We can't be looking at anything other than a root, internal, or leaf
@@ -456,7 +464,24 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, VALUE_T &
   return ERROR_INSANE;
 }
 
-ERROR_T SplitNode (BTreeNode &lhs, BTreeNode &rhs) {
+
+bool BTreeIndex::NodeFull(const SIZE_T ptr){
+  BTreeNode b;
+  b.Unserialize(buffercache, ptr);
+
+  switch(b.info.nodetype){
+    case BTREE_ROOT_NODE:
+    case BTREE_INTERIOR_NODE:
+      return (b.info.GetNumSlotsAsInterior() == b.info.numkeys);
+    case BTREE_LEAF_NODE:
+      return (b.info.GetNumSlotsAsLeaf() == b.info.numkeys);
+  }
+  return false;
+
+}
+
+
+ERROR_T BTreeIndex::SplitNode (BTreeNode &lhs, BTreeNode &rhs) {
 	BTreeNode lhs-static = lhs;
 	BTreeNode rhs = new BTreeNode(lhs-static);
 	SIZE_T n;
