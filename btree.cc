@@ -391,20 +391,27 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
 
 	SIZE_T lhs;
 	SIZE_T rhs;
-	if ((rc = AllocateNode(lhs)) != ERROR_NOERROR) { return rc; }
-	if ((rc = AllocateNode(rhs)) != ERROR_NOERROR) { return rc; } 
+	//initialize two leaves for root
+	rc = AllocateNode(lhs);
+	if (rc) { return rc; }
+
+	rc = AllocateNode(rhs);
+	if (rc) { return rc; }
+
 	leaf.Serialize(buffercache, lhs);
 	leaf.Serialize(buffercache, rhs);
-	root.info.numkeys+=1;
+	root.info.numkeys++;
+	
+	//set pointers for left and right leaves
 	root.SetKey(0, key);
 	root.SetPtr(0, lhs);
 	root.SetPtr(1, rhs);
 	root.Serialize(buffercache, superblock.info.rootnode);
       }    
-      cout << "Beginning insert process..." << endl;
+      cout << "Beginning insert process...Call Insert Helper" << endl;
       //this is the error we want, can now start insert
 
-      // Step 1. Initialize x as root => Start InsertHelper at the root node
+      //start from root
       rc = InsertHelper(superblock_index+1, key, value);
       if (rc) { return rc; }
   }
@@ -439,8 +446,8 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
     for (offset=0;offset<b.info.numkeys;offset++) { 
       rc=b.GetKey(offset,testkey);
       if (rc) {  return rc; }
-	// shouldn't be key == testKey because that would be in the next 
-	// leaf node and we don't want that 
+	// conditional below shouldn't have key == testKey
+	// because that would be in the next leaf node (not desirable)
       if (key<testkey) {
 	// OK, so we now have the first key that's larger
 	// so we need to recurse on the ptr immediately previous to 
@@ -457,7 +464,7 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
         //check to see if this node is full
         if(NodeFull(ptr)){
           cout << "Node is full 1" << endl;
-          //if it is, split it
+          //if it is full, split it
 	  rc = SplitNode(ptr, splitkey, newnode);
           if (rc) { return rc; }
           cout << "Insert key value pair into newly split node" << endl;
@@ -474,8 +481,8 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
       rc=b.GetPtr(b.info.numkeys,ptr);
 
       if (rc) { return rc; }
-      cout << "Recursive call 2" << endl;
 
+      cout << "Recursive call 2" << endl;
       rc = InsertHelper(ptr,key,value);
       if (rc) { return rc; }
 
@@ -495,6 +502,7 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
   case BTREE_LEAF_NODE:
     cout << "BTREE_LEAF_NODE" << endl;
     cout << "Insert Key val into leaf node" << endl;
+    //simply insert into leaf (we will split later if necessary)
     return InsertKeyVal(node, key, value, 0);
     break;
   default:
@@ -575,72 +583,20 @@ ERROR_T BTreeIndex::SplitNode (const SIZE_T node, KEY_T &splitkey, SIZE_T &newno
 
   return rhs.Serialize(buffercache, newnode);
 
-
-  }
-
+}
 
 
-
-/*
-	BTreeNode lhs-static = lhs;
-	BTreeNode rhs = new BTreeNode(lhs-static);
-	SIZE_T n;
-	ERROR_T rc;
-	rc = AllocateNode(n);
-	if (rc != ERROR_NOERROR) { 
-	   return rc;
-	}
-	switch (lhs-static.info.nodetype) {
-  	  case BTREE_ROOT_NODE:
-	  case BTREE_INTERIOR_NODE:
-	    // number of total slots (available + filled)	  
-	    int length =  lhs-static.info.numkeys; 
-	    list<KEY_T> keys[] = lhs-static.data;
-	    int middle_key_index = keys[length/2];
-	    // clear node data and initialize to array of length length
-	    lhs.data = [length]; 
-	    // same
-	    rhs.data = [length]; 
-	    lhs.numkey = length/2;
-	    rhs.numkey = length/2;
-	    for (int i = 0; i < length/2; i++) {
-		lhs.data[i] = keys[i];
-		rhs.data[i] = keys[length/2 + i];
-  	    }
-	    rhs.data[length/2 + 1] = keys[length - 1];
-	    // Insert middle key index into parent node
-	    break; 
-	  case BTREE_LEAF_NODE:
-	    int length =  lhs-static.info.numkeys;
-	    list<KeyValuePair> keyVals [] = lhs-static.data;
-	    int middle_key = keyVals[length/2];
-	    lhs.data = [length];
-	    rhs.data = [length];
-	    for (int i = 0; i < length/2; i++) {
-	       	lhs.data[i] = keyVals[i];
-		rhs.data[i] = keyVals[length/2 + i];
-	    } 
-	    rhs.data[length/2 + 1] = keys[length - 1];
-	    lhs.numkey = length/2;
-	    rhs.numkey = length/2;
-	    // Insert middle key index into parent node
-	     break;
-          default:
-	    return ERROR_INSANE;
-	    break;
-	}
-	rc = rhs.Serialize(buffercache, n);
-	if (rc != ERROR_NOERROR) { return rc;}
- */
-ERROR_T BTreeIndex::InsertKeyVal(const SIZE_T node, const KEY_T &key, const VALUE_T &value, SIZE_T newNode) {
+ERROR_T BTreeIndex::InsertKeyVal(const SIZE_T node, const KEY_T &key, const VALUE_T &value, SIZE_T newnode) {
   BTreeNode b;
-  b.Unserialize(buffercache, node);
   KEY_T testKey;
   SIZE_T entriesToCopy;
-  SIZE_T numKeys = b.info.numkeys;
   SIZE_T i;
   ERROR_T rc;
   SIZE_T entrySize;
+
+
+  b.Unserialize(buffercache, node);
+  SIZE_T numKeys = b.info.numkeys;
 
   switch (b.info.nodetype) {
 
@@ -660,40 +616,50 @@ ERROR_T BTreeIndex::InsertKeyVal(const SIZE_T node, const KEY_T &key, const VALU
   b.info.numkeys++;
   if (numKeys > 0) {
     for (i=0, entriesToCopy = numKeys; i < numKeys; i++, entriesToCopy--) {
-      if ((rc = b.GetKey(i,testKey))) {
-         return rc;
-      }
+      rc = b.GetKey(i, testKey);
+      if (rc) { return rc; }
+
       if (key < testKey) {
         void *src = b.ResolveKey(i);
 	void *dest = b.ResolveKey(i+1);
 	memmove(dest, src, entriesToCopy * entrySize);
 	if (b.info.nodetype == BTREE_LEAF_NODE) {
-	  if ((rc = b.SetKey(i, key)) || (rc = b.SetVal(i, value))) {
-	    return rc;
-	  }
+          rc = b.SetKey(i, key);
+	  if (rc) { return rc; }
+
+          rc = b.SetVal(i, value);
+          if (rc) { return rc; }
 	} else {
-	  if ((rc = b.SetKey(i, key)) || (rc = b.SetPtr(i + 1, newNode))) {
-	    return rc;
-	  }
+          rc = b.SetKey(i, key);
+          if (rc) { return rc; }
+          rc = b.SetPtr(i+1, newnode);
+          if (rc) { return rc; }
 	}
 	break;
       }
       if (i == (numKeys - 1)) {
+        
+	rc = b.SetKey(numKeys, key);
+	if (rc) { return rc; }
 	if (b.info.nodetype == BTREE_LEAF_NODE) {
-	  if ((rc = b.SetKey(numKeys, key)) || (rc = b.SetVal(numKeys, value))) {
-	    return rc;
-	  }
-	} else {
-	  if ((rc = b.SetKey(numKeys, key)) || (rc = b.SetPtr(numKeys + 1, newNode))) {
-	    return rc;
-	  }
+	  rc = b.SetVal(numKeys, value);
+	  if (rc) { return rc; }
+
+	} else { 
+          rc = b.SetPtr(numKeys+1, newnode);
+	  if (rc) { return rc; }
 	}
 	break;
       }
 
     }
-  } else if ((rc = b.SetKey(0, key)) || (rc = b.SetVal(0, value))) {
-    return rc;
+  }
+  else {
+    rc = b.SetKey(0, key);
+    if (rc) { return rc; }
+
+    rc = b.SetVal(0, value);
+    if (rc) { return rc; }
   }
   return b.Serialize(buffercache, node);
 
