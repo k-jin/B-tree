@@ -481,7 +481,65 @@ bool BTreeIndex::NodeFull(const SIZE_T ptr){
 }
 
 
-ERROR_T BTreeIndex::SplitNode (BTreeNode &lhs, BTreeNode &rhs) {
+ERROR_T BTreeIndex::SplitNode (const SIZE_T node, KEY_T &splitkey, SIZE_T &newnode) {
+  BTreeNode lhs;
+  ERROR_T rc;
+  
+  SIZE_T numLeft;
+  SIZE_T numRight;
+
+  // the left node will be the first part of the current ndoe
+  lhs.Unserialize(buffercache, node);
+  BTreeNode rhs = lhs;
+
+  //allocate space for new node
+  rc = AllocateNode(newnode);
+  if (rc) { return rc; }
+
+  // write this space onto the disk
+  rc = rhs.Serialize(buffercache, newnode);
+  if (rc) { return rc; }
+
+  
+  numLeft = lhs.info.numkeys;
+  numRight = lhs.info.numkeys - numLeft;
+
+  char *leftStart;
+  char *rightStart;
+ 
+  //if we are splitting a leaf node
+  if(lhs.info.nodetype == BTREE_LEAF_NODE){
+    // number of keys in the left and right nodes
+    
+    lhs.GetKey(numLeft-1, splitkey);
+    leftStart = lhs.ResolveKeyVal(numLeft);
+    rightStart = rhs.ResolveKeyVal(0);
+
+    memcpy(leftStart, rightStart, numRight*(lhs.info.keysize+lhs.info.valuesize));
+
+  else{
+    lhs.GetKey(numLeft, splitkey);
+
+    leftStart = lhs.ResolvePtr(numLeft);
+    rightStart = rhs.ResolvePtr(0);
+
+    memcpy(leftStart, rightStart, numRight*(lhs.info.keysize+lhs.info.valuesize);
+  }
+  lhs.info.numkeys = numLeft;
+  rhs.info.numkeys = numRightKeys;
+
+  rc = lhs.Serialize(buffercache, node);
+  if (rc) { return rc; }
+
+  return rhs.Serialize(buffercache, newnode);
+
+
+  }
+
+
+
+
+/*
 	BTreeNode lhs-static = lhs;
 	BTreeNode rhs = new BTreeNode(lhs-static);
 	SIZE_T n;
@@ -531,6 +589,7 @@ ERROR_T BTreeIndex::SplitNode (BTreeNode &lhs, BTreeNode &rhs) {
 	}
 	rc = rhs.Serialize(buffercache, n);
 	if (rc != ERROR_NOERROR) { return rc;}
+ */
 }
 
 ERROR_T BTreeIndex::Update(const KEY_T &key, const VALUE_T &value)
