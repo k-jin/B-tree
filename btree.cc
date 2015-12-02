@@ -413,7 +413,9 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, VALUE_T &
     for (offset=0;offset<b.info.numkeys;offset++) { 
       rc=b.GetKey(offset,testkey);
       if (rc) {  return rc; }
-      if (key<testkey || key==testkey) {
+	// shouldn't be key == testKey because that would be in the next 
+	// leaf node and we don't want that 
+      if (key<testkey) {
 	// OK, so we now have the first key that's larger
 	// so we need to recurse on the ptr immediately previous to 
 	// this one, if it exists
@@ -590,6 +592,70 @@ ERROR_T BTreeIndex::SplitNode (const SIZE_T node, KEY_T &splitkey, SIZE_T &newno
 	rc = rhs.Serialize(buffercache, n);
 	if (rc != ERROR_NOERROR) { return rc;}
  */
+}
+
+ERROR_T BTreeIndex::InsertKeyValPair(const SIZE_T node, const KEY_T &key, const VALUE_T &value, SIZE_T newNode) {
+  BTreeNode b;
+  b.Unserialize(buffercache, node);
+  KEY_T testKey;
+  SIZE_T entriesToCopy;
+  SIZE_T numKeys = b.info.numkeys;
+  SIZE_T i;
+  ERROR_T rc;
+  SIZE_T entrySize;
+
+  switch (b.info.nodetype) {
+    case BTREE_INTERIOR_NODE:
+      entrySize = b.info.keysize + sizeof(SIZE_T);
+      break;
+    case BTREE_LEAF_NODE:
+      entrySize = b.info.keysize + b.info.valuesize;
+      break;
+    case BTREE_ROOT_NODE:
+    default:
+      return ERROR_INSANE;
+  }
+
+  b.info.numkeys++;
+  if (numKeys > 0) {
+    for (i=0, entriesToCopy = numKeys; i < numKeys; i++, entriesToCopy--) {
+      if ((rc = b.GetKey(i,testKey))) {
+         return rc;
+      }
+      if (key < testKey) {
+        void *src = b.ResolveKey(i);
+	void *dest = b.ResolveKey(i+1);
+	memmove(dest, src, entriesToCopy * entrySize);
+	if (b.info.nodetype == BTREE_LEAF_NODE) {
+	  if ((rc = b.SetKey(i, key)) || (rc = b.SetVal(i, value))) {
+	    return rc;
+	  }
+	} else {
+	  if ((rc = b.SetKey(i, key)) || (rc = b.SetPtr(i + 1, newNode))) {
+	    return rc;
+	  }
+	}
+	break;
+      }
+      if (i == (numKeys - 1)) {
+	if (b.info.nodetype == BTREE_LEAF_NODE) {
+	  if ((rc = b.SetKey(numKeys, key)) || (rc = b.SetVal(numKeys, value))) {
+	    return rc;
+	  }
+	} else {
+	  if ((rc = b.SetKey(numKeys, key)) || (rc = b.SetPtr(numKeys + 1, newNode))) {
+	    return rc;
+	  }
+	}
+	break;
+      }
+
+    }
+  } else if ((rc = b.SetKey(0, key)) || (rc = b.SetVal(0, value))) {
+    return rc;
+  }
+  return b.Serialize(buffercache, node);
+
 }
 
 ERROR_T BTreeIndex::Update(const KEY_T &key, const VALUE_T &value)
