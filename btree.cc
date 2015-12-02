@@ -377,7 +377,7 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
   switch(rc){
     case ERROR_NOERROR:
       //value found and updated successfully, no need to insert duplicate
-      return ERROR_CONFLICT;
+      return ERROR_NOERROR;
     case ERROR_NONEXISTENT:
       BTreeNode root;
       root.Unserialize(buffercache, superblock.info.rootnode);
@@ -588,15 +588,13 @@ ERROR_T BTreeIndex::SplitNode (const SIZE_T node, KEY_T &splitkey, SIZE_T &newno
 
 ERROR_T BTreeIndex::InsertKeyVal(const SIZE_T node, const KEY_T &key, const VALUE_T &value, SIZE_T newnode) {
   BTreeNode b;
+  b.Unserialize(buffercache, node);
   KEY_T testKey;
   SIZE_T entriesToCopy;
+  SIZE_T numKeys = b.info.numkeys;
   SIZE_T i;
   ERROR_T rc;
   SIZE_T entrySize;
-
-
-  b.Unserialize(buffercache, node);
-  SIZE_T numKeys = b.info.numkeys;
 
   switch (b.info.nodetype) {
 
@@ -616,54 +614,45 @@ ERROR_T BTreeIndex::InsertKeyVal(const SIZE_T node, const KEY_T &key, const VALU
   b.info.numkeys++;
   if (numKeys > 0) {
     for (i=0, entriesToCopy = numKeys; i < numKeys; i++, entriesToCopy--) {
-      rc = b.GetKey(i, testKey);
-      if (rc) { return rc; }
-
+      if ((rc = b.GetKey(i,testKey))) {
+         return rc;
+      }
       if (key < testKey) {
         void *src = b.ResolveKey(i);
 	void *dest = b.ResolveKey(i+1);
 	memmove(dest, src, entriesToCopy * entrySize);
 	if (b.info.nodetype == BTREE_LEAF_NODE) {
-          rc = b.SetKey(i, key);
-	  if (rc) { return rc; }
-
-          rc = b.SetVal(i, value);
-          if (rc) { return rc; }
+	  if ((rc = b.SetKey(i, key)) || (rc = b.SetVal(i, value))) {
+	    return rc;
+	  }
 	} else {
-          rc = b.SetKey(i, key);
-          if (rc) { return rc; }
-          rc = b.SetPtr(i+1, newnode);
-          if (rc) { return rc; }
+	  if ((rc = b.SetKey(i, key)) || (rc = b.SetPtr(i + 1, newnode))) {
+	    return rc;
+	  }
 	}
 	break;
       }
       if (i == (numKeys - 1)) {
-        
-	rc = b.SetKey(numKeys, key);
-	if (rc) { return rc; }
 	if (b.info.nodetype == BTREE_LEAF_NODE) {
-	  rc = b.SetVal(numKeys, value);
-	  if (rc) { return rc; }
-
-	} else { 
-          rc = b.SetPtr(numKeys+1, newnode);
-	  if (rc) { return rc; }
+	  if ((rc = b.SetKey(numKeys, key)) || (rc = b.SetVal(numKeys, value))) {
+	    return rc;
+	  }
+	} else {
+	  if ((rc = b.SetKey(numKeys, key)) || (rc = b.SetPtr(numKeys + 1, newnode))) {
+	    return rc;
+	  }
 	}
 	break;
       }
 
     }
-  }
-  else {
-    rc = b.SetKey(0, key);
-    if (rc) { return rc; }
-
-    rc = b.SetVal(0, value);
-    if (rc) { return rc; }
+  } else if ((rc = b.SetKey(0, key)) || (rc = b.SetVal(0, value))) {
+    return rc;
   }
   return b.Serialize(buffercache, node);
 
 }
+
 
 ERROR_T BTreeIndex::Update(const KEY_T &key, const VALUE_T &value)
 {
