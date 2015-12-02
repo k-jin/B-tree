@@ -107,8 +107,17 @@ public:
   ERROR_T Insert(const KEY_T &key, const VALUE_T &value);
   
   // Helper function for Insert
-  ERROR_T InsertHelper(const SIZE_T &node, const KEY_T &key, VALUE_T &value);
+  ERROR_T InsertHelper(const SIZE_T &node, const KEY_T &key, const VALUE_T &value);
   
+  //checks whether a given node is full
+  bool NodeFull(const SIZE_T ptr);
+  
+  //inserts key value pair
+  ERROR_T InsertKeyVal(const SIZE_T node, const KEY_T &key, const VALUE_T &value, SIZE_T newNode);
+  
+  //splits node
+  ERROR_T SplitNode(const SIZE_T node, KEY_T &splitkey, SIZE_T &newnode);  
+
   // return zero on success
   // return ERROR_NONEXISTENT  if the key doesn't exist
   // return ERROR_SIZE if the key or value are the wrong size for this index
