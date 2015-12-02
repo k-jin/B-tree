@@ -379,9 +379,8 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
       //value found and updated successfully, no need to insert duplicate
       return ERROR_CONFLICT;
     case ERROR_NONEXISTENT:
+      cout << "Beginning insert process..." << endl;
       //this is the error we want, can now start insert
-      if (rc) { return rc; } 
-      // find leaf to insert into
 
       // Step 1. Initialize x as root => Start InsertHelper at the root node
       rc = InsertHelper(superblock.info.rootnode, key, value);
@@ -393,6 +392,7 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
  
 ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VALUE_T &value)
 {
+  cout << "Enter Insert Helper" << endl;
   BTreeNode b;
   ERROR_T rc;
   SIZE_T offset;
