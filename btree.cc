@@ -230,7 +230,6 @@ ERROR_T BTreeIndex::LookupOrUpdateInternal(const SIZE_T &node,
       return LookupOrUpdateInternal(ptr,op,key,value);
     } else {
       // There are no keys at all on this node, so nowhere to go
-      cout << "YOLO 2" << endl;
       return ERROR_NONEXISTENT;
     }
     break;
@@ -380,7 +379,6 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
       //value found and updated successfully, no need to insert duplicate
       return ERROR_CONFLICT;
     case ERROR_NONEXISTENT:
-      cout << "YOLO 1" << endl; 
       //this is the error we want, can now start insert
       if (rc) { return rc; } 
       // find leaf to insert into
@@ -389,7 +387,7 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
       rc = InsertHelper(superblock.info.rootnode, key, value);
       if (rc) { return rc; }
   }
-
+  return ERROR_NOERROR;
 }
 
  
@@ -429,14 +427,17 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
 	if (rc) { return rc; }
          
         //call recursively
+        cout << "Recursive call 1" << endl;
 	rc = InsertHelper(ptr,key,value);
         if (rc) { return rc; }
 
         //check to see if this node is full
         if(NodeFull(ptr)){
+          cout << "Node is full 1" << endl;
           //if it is, split it
 	  rc = SplitNode(ptr, splitkey, newnode);
           if (rc) { return rc; }
+          cout << "Insert key value pair into newly split node" << endl;
 	  return InsertKeyVal(node, splitkey, VALUE_T(), newnode);
         }
         else { return rc; }
@@ -445,25 +446,31 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
     // if we got here, we need to go to the next pointer, if it exists
     if (b.info.numkeys>0) { 
       //same process as before
+      
       rc=b.GetPtr(b.info.numkeys,ptr);
       if (rc) { return rc; }
+      cout << "Recursive call 2" << endl;
       rc = InsertHelper(ptr,key,value);
       if (rc) { return rc; }
 
       if(NodeFull(ptr)){ 
+        cout << "Node is full 2" << endl;
         rc = SplitNode(ptr, splitkey, newnode);
         if (rc) { return rc; }
         return InsertKeyVal(node, splitkey, VALUE_T(), newnode);
       }
     } else {
+        cout << "b.info.numkeys is <= 0" << endl;
         return rc;
     }
     break;
   case BTREE_LEAF_NODE:
+    cout << "BTREE_LEAF_NODE" << endl;
+    cout << "Insert Key val into leaf node" << endl;
     return InsertKeyVal(node, key, value, 0);
     break;
   default:
-    // We can't be looking at anything other than a root, internal, or leaf
+    cout << "We can't be looking at anything other than a root, internal, or leaf" << endl;
     return ERROR_INSANE;
     break;
   }  
