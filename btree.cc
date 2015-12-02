@@ -539,7 +539,7 @@ ERROR_T BTreeIndex::SplitNode (const SIZE_T node, KEY_T &splitkey, SIZE_T &newno
 
 
 
-
+/*
 	BTreeNode lhs-static = lhs;
 	BTreeNode rhs = new BTreeNode(lhs-static);
 	SIZE_T n;
@@ -589,6 +589,7 @@ ERROR_T BTreeIndex::SplitNode (const SIZE_T node, KEY_T &splitkey, SIZE_T &newno
 	}
 	rc = rhs.Serialize(buffercache, n);
 	if (rc != ERROR_NOERROR) { return rc;}
+ */
 }
 
 ERROR_T BTreeIndex::Update(const KEY_T &key, const VALUE_T &value)
