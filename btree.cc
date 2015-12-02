@@ -369,7 +369,7 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
   // 	b) If y is not full, change x to point to y
   // 	c) If y is full, split it and change x to point to one of the two parts of y. If k < mid key of y, set x as first part of y. Else, set x as second part of y. When we split y, we move mid key from y to its parent x.
   // 3) Repeat loop 2) until x is a leaf. Insert k to x.
-
+  
   VALUE_T val;
 
   ERROR_T rc = LookupOrUpdateInternal(superblock.info.rootnode, BTREE_OP_LOOKUP, key, val);
@@ -379,11 +379,33 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
       //value found and updated successfully, no need to insert duplicate
       return ERROR_CONFLICT;
     case ERROR_NONEXISTENT:
+      BTreeNode root;
+      root.Unserialize(buffercache, superblock.info.rootnode);
+      if (root.info.numkeys == 0) {
+	cout << "Root initialization" << endl;
+	BTreeNode leaf(BTREE_LEAF_NODE,
+			superblock.info.keysize,
+			superblock.info.valuesize,
+			buffercache->GetBlockSize());
+        
+
+	SIZE_T lhs;
+	SIZE_T rhs;
+	if ((rc = AllocateNode(lhs)) != ERROR_NOERROR) { return rc; }
+	if ((rc = AllocateNode(rhs)) != ERROR_NOERROR) { return rc; } 
+	leaf.Serialize(buffercache, lhs);
+	leaf.Serialize(buffercache, rhs);
+	root.info.numkeys+=1;
+	root.SetKey(0, key);
+	root.SetPtr(0, lhs);
+	root.SetPtr(1, rhs);
+	root.Serialize(buffercache, superblock.info.rootnode);
+      }    
       cout << "Beginning insert process..." << endl;
       //this is the error we want, can now start insert
 
       // Step 1. Initialize x as root => Start InsertHelper at the root node
-      rc = InsertHelper(superblock.info.rootnode, key, value);
+      rc = InsertHelper(superblock_index+1, key, value);
       if (rc) { return rc; }
   }
   return ERROR_NOERROR;
@@ -393,6 +415,7 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
 ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VALUE_T &value)
 {
   cout << "Enter Insert Helper" << endl;
+  cout << "-----------------------" << endl;
   BTreeNode b;
   ERROR_T rc;
   SIZE_T offset;
@@ -401,7 +424,7 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
 
   SIZE_T newnode;
   KEY_T splitkey;
-
+  
   rc = b.Unserialize(buffercache,node);
 
   if (rc!=ERROR_NOERROR) { 
@@ -446,12 +469,16 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
     // if we got here, we need to go to the next pointer, if it exists
     if (b.info.numkeys>0) { 
       //same process as before
-      
+      cout << "b.info.numkeys > 0" << endl;      
+
       rc=b.GetPtr(b.info.numkeys,ptr);
+
       if (rc) { return rc; }
       cout << "Recursive call 2" << endl;
+
       rc = InsertHelper(ptr,key,value);
       if (rc) { return rc; }
+
 
       if(NodeFull(ptr)){ 
         cout << "Node is full 2" << endl;
@@ -459,9 +486,10 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
         if (rc) { return rc; }
         return InsertKeyVal(node, splitkey, VALUE_T(), newnode);
       }
+      else { return rc; }
     } else {
         cout << "b.info.numkeys is <= 0" << endl;
-        return rc;
+        return ERROR_NONEXISTENT;
     }
     break;
   case BTREE_LEAF_NODE:
