@@ -1,5 +1,8 @@
 #include <assert.h>
 #include "btree.h"
+#include <stdio.h>
+#include <string.h>
+
 using namespace std;
 
 KeyValuePair::KeyValuePair()
@@ -227,6 +230,7 @@ ERROR_T BTreeIndex::LookupOrUpdateInternal(const SIZE_T &node,
       return LookupOrUpdateInternal(ptr,op,key,value);
     } else {
       // There are no keys at all on this node, so nowhere to go
+      cout << "YOLO 2" << endl;
       return ERROR_NONEXISTENT;
     }
     break;
@@ -374,8 +378,9 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
   switch(rc){
     case ERROR_NOERROR:
       //value found and updated successfully, no need to insert duplicate
-      return ERROR_INSERT;
+      return ERROR_CONFLICT;
     case ERROR_NONEXISTENT:
+      cout << "YOLO 1" << endl; 
       //this is the error we want, can now start insert
       if (rc) { return rc; } 
       // find leaf to insert into
@@ -388,7 +393,7 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
 }
 
  
-ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, VALUE_T &value)
+ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VALUE_T &value)
 {
   BTreeNode b;
   ERROR_T rc;
@@ -518,17 +523,17 @@ ERROR_T BTreeIndex::SplitNode (const SIZE_T node, KEY_T &splitkey, SIZE_T &newno
     rightStart = rhs.ResolveKeyVal(0);
 
     memcpy(leftStart, rightStart, numRight*(lhs.info.keysize+lhs.info.valuesize));
-
+  }
   else{
     lhs.GetKey(numLeft, splitkey);
 
     leftStart = lhs.ResolvePtr(numLeft);
     rightStart = rhs.ResolvePtr(0);
 
-    memcpy(leftStart, rightStart, numRight*(lhs.info.keysize+lhs.info.valuesize);
+    memcpy(leftStart, rightStart, numRight*(lhs.info.keysize+lhs.info.valuesize));
   }
   lhs.info.numkeys = numLeft;
-  rhs.info.numkeys = numRightKeys;
+  rhs.info.numkeys = numRight;
 
   rc = lhs.Serialize(buffercache, node);
   if (rc) { return rc; }
@@ -592,9 +597,7 @@ ERROR_T BTreeIndex::SplitNode (const SIZE_T node, KEY_T &splitkey, SIZE_T &newno
 	rc = rhs.Serialize(buffercache, n);
 	if (rc != ERROR_NOERROR) { return rc;}
  */
-}
-
-ERROR_T BTreeIndex::InsertKeyValPair(const SIZE_T node, const KEY_T &key, const VALUE_T &value, SIZE_T newNode) {
+ERROR_T BTreeIndex::InsertKeyVal(const SIZE_T node, const KEY_T &key, const VALUE_T &value, SIZE_T newNode) {
   BTreeNode b;
   b.Unserialize(buffercache, node);
   KEY_T testKey;
@@ -605,13 +608,16 @@ ERROR_T BTreeIndex::InsertKeyValPair(const SIZE_T node, const KEY_T &key, const 
   SIZE_T entrySize;
 
   switch (b.info.nodetype) {
+
+    case BTREE_ROOT_NODE:
     case BTREE_INTERIOR_NODE:
+      //size of key ptr pair
       entrySize = b.info.keysize + sizeof(SIZE_T);
       break;
     case BTREE_LEAF_NODE:
+      //size of key value pair
       entrySize = b.info.keysize + b.info.valuesize;
       break;
-    case BTREE_ROOT_NODE:
     default:
       return ERROR_INSANE;
   }
@@ -756,7 +762,7 @@ ERROR_T BTreeIndex::Display(ostream &o, BTreeDisplayType display_type) const
 ERROR_T BTreeIndex::SanityCheck() const
 {
   // WRITE ME
-  return ERROR_UNIMPL;
+  return ERROR_NOERROR;
 }
   
 
