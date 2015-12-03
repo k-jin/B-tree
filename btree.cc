@@ -234,7 +234,7 @@ ERROR_T BTreeIndex::LookupOrUpdateInternal(const SIZE_T &node,
     }
     break;
   case BTREE_LEAF_NODE:
-    // Scan through keys looking for matching value
+    // Scan through keys looking for matching
     for (offset=0;offset<b.info.numkeys;offset++) { 
       rc=b.GetKey(offset,testkey);
       if (rc) {  return rc; }
@@ -371,18 +371,12 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
   // 3) Repeat loop 2) until x is a leaf. Insert k to x.
   
   VALUE_T val;
-
-  ERROR_T rc = LookupOrUpdateInternal(superblock.info.rootnode, BTREE_OP_LOOKUP, key, val);
-
-  switch(rc){
-    case ERROR_NOERROR:
-      //value found and updated successfully, no need to insert duplicate
-      return ERROR_NOERROR;
-    case ERROR_NONEXISTENT:
+  ERROR_T rc;
+  if(Lookup(key, val) == ERROR_NONEXISTENT){
       BTreeNode root;
       root.Unserialize(buffercache, superblock.info.rootnode);
       if (root.info.numkeys == 0) {
-	cout << "Root initialization" << endl;
+	//cout << "Root initialization" << endl;
 	BTreeNode leaf(BTREE_LEAF_NODE,
 			superblock.info.keysize,
 			superblock.info.valuesize,
@@ -408,21 +402,22 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
 	root.SetPtr(1, rhs);
 	root.Serialize(buffercache, superblock.info.rootnode);
       }    
-      cout << "Beginning insert process...Call Insert Helper" << endl;
+      //cout << "Beginning insert process...Call Insert Helper" << endl;
       //this is the error we want, can now start insert
 
       //start from root
       rc = InsertHelper(superblock_index+1, key, value);
       if (rc) { return rc; }
   }
-  return ERROR_NOERROR;
+  //key already exists
+  else { return ERROR_CONFLICT; }
 }
 
  
 ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VALUE_T &value)
 {
-  cout << "Enter Insert Helper" << endl;
-  cout << "-----------------------" << endl;
+  //cout << "Enter Insert Helper" << endl;
+  //cout << "-----------------------" << endl;
   BTreeNode b;
   ERROR_T rc;
   SIZE_T offset;
@@ -457,17 +452,17 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
 	if (rc) { return rc; }
          
         //call recursively
-        cout << "Recursive call 1" << endl;
+        //cout << "Recursive call 1" << endl;
 	rc = InsertHelper(ptr,key,value);
         if (rc) { return rc; }
 
         //check to see if this node is full
         if(NodeFull(ptr)){
-          cout << "Node is full 1" << endl;
+          //cout << "Node is full 1" << endl;
           //if it is full, split it
 	  rc = SplitNode(ptr, splitkey, newnode);
           if (rc) { return rc; }
-          cout << "Insert key value pair into newly split node" << endl;
+          //cout << "Insert key ptr pair into newly split node" << endl;
 	  return InsertKeyVal(node, splitkey, VALUE_T(), newnode);
         }
         else { return rc; }
@@ -476,43 +471,44 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
     // if we got here, we need to go to the next pointer, if it exists
     if (b.info.numkeys>0) { 
       //same process as before
-      cout << "b.info.numkeys > 0" << endl;      
+      //cout << "b.info.numkeys > 0" << endl;      
 
       rc=b.GetPtr(b.info.numkeys,ptr);
 
       if (rc) { return rc; }
 
-      cout << "Recursive call 2" << endl;
+      //cout << "Recursive call 2" << endl;
       rc = InsertHelper(ptr,key,value);
       if (rc) { return rc; }
 
 
       if(NodeFull(ptr)){ 
-        cout << "Node is full 2" << endl;
+       // cout << "Node is full 2" << endl;
         rc = SplitNode(ptr, splitkey, newnode);
         if (rc) { return rc; }
         return InsertKeyVal(node, splitkey, VALUE_T(), newnode);
       }
       else { return rc; }
     } else {
-        cout << "b.info.numkeys is <= 0" << endl;
+       // cout << "b.info.numkeys is <= 0" << endl;
         return ERROR_NONEXISTENT;
     }
     break;
   case BTREE_LEAF_NODE:
-    cout << "BTREE_LEAF_NODE" << endl;
-    cout << "Insert Key val into leaf node" << endl;
+   // cout << "BTREE_LEAF_NODE" << endl;
+   // cout << "Insert key val pair into leaf node" << endl;
     //simply insert into leaf (we will split later if necessary)
     return InsertKeyVal(node, key, value, 0);
     break;
   default:
-    cout << "We can't be looking at anything other than a root, internal, or leaf" << endl;
+   // cout << "We can't be looking at anything other than a root, internal, or leaf" << endl;
     return ERROR_INSANE;
     break;
   }  
 
   return ERROR_INSANE;
 }
+
 
 
 bool BTreeIndex::NodeFull(const SIZE_T node){
@@ -529,10 +525,10 @@ bool BTreeIndex::NodeFull(const SIZE_T node){
   switch(b.info.nodetype){
     case BTREE_ROOT_NODE:
     case BTREE_INTERIOR_NODE:
-	full = 2 / 3 * b.info.GetNumSlotsAsInterior();
+	full = (2 / 3) * b.info.GetNumSlotsAsInterior();
 	return (full <= b.info.numkeys);
     case BTREE_LEAF_NODE:
-	full = 2 / 3 * b.info.GetNumSlotsAsLeaf();
+	full = (2 / 3) * b.info.GetNumSlotsAsLeaf();
 	return (full <= b.info.numkeys);
 
   }
@@ -540,125 +536,150 @@ bool BTreeIndex::NodeFull(const SIZE_T node){
 
 }
 
-
-ERROR_T BTreeIndex::SplitNode (const SIZE_T node, KEY_T &splitkey, SIZE_T &newnode) {
+//splits given node into two nodes
+ERROR_T BTreeIndex::SplitNode (const SIZE_T node, KEY_T &midkey, SIZE_T &newnode) {
   BTreeNode lhs;
-  ERROR_T rc;
-  
-  SIZE_T numLeft;
-  SIZE_T numRight;
-
-  // the left node will be the first part of the current ndoe
-  lhs.Unserialize(buffercache, node);
+  //just copy for now
   BTreeNode rhs = lhs;
 
+  ERROR_T rc;
+ 
+  //represents number of keys in both left and right nodes
+  SIZE_T numLHS;
+  SIZE_T numRHS;
+
+  // the left node will represent the first half of the current node
+  lhs.Unserialize(buffercache, node);
   //allocate space for new node
   rc = AllocateNode(newnode);
   if (rc) { return rc; }
 
-  // write this space onto the disk
+  // write this new space for rhs onto the disk
   rc = rhs.Serialize(buffercache, newnode);
   if (rc) { return rc; }
 
-  
-  numLeft = lhs.info.numkeys;
-  numRight = lhs.info.numkeys - numLeft;
-
-  char *leftStart;
-  char *rightStart;
+  char *lhsStart;
+  char *rhsStart;
  
   //if we are splitting a leaf node
   if(lhs.info.nodetype == BTREE_LEAF_NODE){
     // number of keys in the left and right nodes
-    
-    lhs.GetKey(numLeft-1, splitkey);
-    leftStart = lhs.ResolveKeyVal(numLeft);
-    rightStart = rhs.ResolveKeyVal(0);
+    numLHS = (lhs.info.numkeys+2)/2; //we want to add one more to include ptr that will point to rhs (+2/2 works for both even and odd numbers)
 
-    memcpy(leftStart, rightStart, numRight*(lhs.info.keysize+lhs.info.valuesize));
+    numRHS = (lhs.info.numkeys - numLHS);
+ 
+    //gives numLeft-1th pointer
+    lhs.GetKey(numLHS-1, midkey);
+
+    //gives ith pointer to ith key value pair (leaf)
+    lhsStart = lhs.ResolveKeyVal(numLHS);
+    rhsStart = rhs.ResolveKeyVal(0);
+
+    memcpy(rhsStart, lhsStart, numRHS*(lhs.info.keysize+lhs.info.valuesize));
   }
+
+  //we're splitting an interior node
   else{
-    lhs.GetKey(numLeft, splitkey);
 
-    leftStart = lhs.ResolvePtr(numLeft);
-    rightStart = rhs.ResolvePtr(0);
+    numLHS = lhs.info.numkeys / 2;
+    numRHS = lhs.info.numkeys - numLHS - 1;
 
-    memcpy(leftStart, rightStart, numRight*(lhs.info.keysize+lhs.info.valuesize));
+    lhs.GetKey(numLHS, midkey);
+
+    lhsStart = lhs.ResolvePtr(numLHS);
+    rhsStart = rhs.ResolvePtr(0);
+
+    memcpy(rhsStart, lhsStart, numRHS*(lhs.info.keysize+lhs.info.valuesize));
   }
-  lhs.info.numkeys = numLeft;
-  rhs.info.numkeys = numRight;
 
+  //these nodes have new key counts
+  lhs.info.numkeys = numLHS;
+  rhs.info.numkeys = numRHS;
+
+  //write back to disk
   rc = lhs.Serialize(buffercache, node);
   if (rc) { return rc; }
 
-  return rhs.Serialize(buffercache, newnode);
+  rc = rhs.Serialize(buffercache, newnode);
+  if (rc) { return rc; }
+
+  return ERROR_NOERROR;
 
 }
 
 
 ERROR_T BTreeIndex::InsertKeyVal(const SIZE_T node, const KEY_T &key, const VALUE_T &value, SIZE_T newnode) {
   BTreeNode b;
-  b.Unserialize(buffercache, node);
   KEY_T testKey;
-  SIZE_T entriesToCopy;
-  SIZE_T numKeys = b.info.numkeys;
-  SIZE_T i;
   ERROR_T rc;
-  SIZE_T entrySize;
+
+  SIZE_T slotsLeft;
+  SIZE_T slotSize;
+
+  b.Unserialize(buffercache, node);
+  SIZE_T numkeys = b.info.numkeys;
 
   switch (b.info.nodetype) {
-
     case BTREE_ROOT_NODE:
     case BTREE_INTERIOR_NODE:
       //size of key ptr pair
-      entrySize = b.info.keysize + sizeof(SIZE_T);
+      slotSize = b.info.keysize + sizeof(SIZE_T);
       break;
     case BTREE_LEAF_NODE:
       //size of key value pair
-      entrySize = b.info.keysize + b.info.valuesize;
+      slotSize = b.info.keysize + b.info.valuesize;
       break;
     default:
       return ERROR_INSANE;
   }
 
+  //we're adding a new key
   b.info.numkeys++;
-  if (numKeys > 0) {
-    for (i=0, entriesToCopy = numKeys; i < numKeys; i++, entriesToCopy--) {
-      if ((rc = b.GetKey(i,testKey))) {
-         return rc;
-      }
+
+  if (numkeys > 0) {
+    slotsLeft = numkeys;
+    for (SIZE_T i=0; i < numkeys; i++) {
+      rc = b.GetKey(i, testKey);
+      if (rc) { return rc; }
+
       if (key < testKey) {
+        //we're going to move existing data over one
         void *src = b.ResolveKey(i);
 	void *dest = b.ResolveKey(i+1);
-	memmove(dest, src, entriesToCopy * entrySize);
-	if (b.info.nodetype == BTREE_LEAF_NODE) {
-	  if ((rc = b.SetKey(i, key)) || (rc = b.SetVal(i, value))) {
-	    return rc;
-	  }
-	} else {
-	  if ((rc = b.SetKey(i, key)) || (rc = b.SetPtr(i + 1, newnode))) {
-	    return rc;
-	  }
-	}
-	break;
-      }
-      if (i == (numKeys - 1)) {
-	if (b.info.nodetype == BTREE_LEAF_NODE) {
-	  if ((rc = b.SetKey(numKeys, key)) || (rc = b.SetVal(numKeys, value))) {
-	    return rc;
-	  }
-	} else {
-	  if ((rc = b.SetKey(numKeys, key)) || (rc = b.SetPtr(numKeys + 1, newnode))) {
-	    return rc;
-	  }
-	}
-	break;
+        //memmove(destination, source, num_bytes)
+        //dest = pointer to dest array where content is copies
+        //src = pointer to src of data to be copied
+	memmove(dest, src, slotsLeft * slotSize);
       }
 
+      //we want it to point to last key
+      if (i == (numkeys - 1)) { i = numkeys; }
+
+      //set key no matter what type of node
+      rc = b.SetKey(i,key);
+      if (rc) { return rc; }
+      if (b.info.nodetype == BTREE_LEAF_NODE) {
+        //if it's a leaf node, it needs a key val pair
+        rc = b.SetVal(i, value);
+        if (rc) { return rc; }
+      } else {
+        //otherwise it's a key ptr pair
+        rc = b.SetPtr(i+1, newnode);
+        if(rc) { return rc; }
+      }
+      break;
     }
-  } else if ((rc = b.SetKey(0, key)) || (rc = b.SetVal(0, value))) {
-    return rc;
+    slotsLeft--;
   }
+  //there was nothing on the node, that's easy 
+  else {
+    rc = b.SetKey(0, key);
+    if (rc) { return rc; }
+ 
+    rc = b.SetVal(0, value);
+    if (rc) { return rc; }
+  }
+  //write back onto disk
   return b.Serialize(buffercache, node);
 
 }
@@ -761,7 +782,6 @@ ERROR_T BTreeIndex::Display(ostream &o, BTreeDisplayType display_type) const
 
 ERROR_T BTreeIndex::SanityCheck() const
 {
-  // WRITE ME
   BTreeNode superblock;
   ERROR_T rc;
   rc = superblock.Unserialize(buffercache, 0);
@@ -772,15 +792,15 @@ ERROR_T BTreeIndex::SanityCheck() const
 
   if (superblock.info.nodetype != BTREE_SUPERBLOCK) {
      cout << "Superblock is not first block" << endl;
-     return ERROR_NONEXISTANT;
+     return ERROR_NONEXISTENT;
   }
-
+/*
   SIZE_T keySize = superblock.info.keysize;
   SIZE_T valSize = superblock.info.valuesize;
   SIZE_T blockSize = superblock.info.blocksize;
-  
+  */
   BTreeNode root;
-  rc = root.Unserialize(buffercache, superblock.info.rootnode) 
+  rc = root.Unserialize(buffercache, superblock.info.rootnode); 
 
   if (rc != ERROR_NOERROR) { 
     return rc;
@@ -788,7 +808,7 @@ ERROR_T BTreeIndex::SanityCheck() const
 
   if (root.info.nodetype != BTREE_ROOT_NODE) { 
     cout << "Root error" << endl;
-    return ERROR_NONEXISTANT;
+    return ERROR_NONEXISTENT;
   }
   
 
