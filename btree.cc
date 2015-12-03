@@ -397,10 +397,14 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
 	root.info.numkeys++;
 	
 	//set pointers for left and right leaves
-	root.SetKey(0, key);
-	root.SetPtr(0, lhs);
-	root.SetPtr(1, rhs);
-	root.Serialize(buffercache, superblock.info.rootnode);
+	rc=root.SetKey(0, key);
+	if (rc) { return rc; }
+	rc=root.SetPtr(0, lhs);
+	if (rc) { return rc; }
+	rc=root.SetPtr(1, rhs);
+	if (rc) { return rc; }
+	rc=root.Serialize(buffercache, superblock.info.rootnode);
+        if (rc) { return rc; }
       }    
       //cout << "Beginning insert process...Call Insert Helper" << endl;
       //this is the error we want, can now start insert
@@ -549,7 +553,8 @@ ERROR_T BTreeIndex::SplitNode (const SIZE_T node, KEY_T &midkey, SIZE_T &newnode
   SIZE_T numRHS;
 
   // the left node will represent the first half of the current node
-  lhs.Unserialize(buffercache, node);
+  rc=lhs.Unserialize(buffercache, node);
+  if (rc) { return rc; }
   //allocate space for new node
   rc = AllocateNode(newnode);
   if (rc) { return rc; }
@@ -569,7 +574,8 @@ ERROR_T BTreeIndex::SplitNode (const SIZE_T node, KEY_T &midkey, SIZE_T &newnode
     numRHS = (lhs.info.numkeys - numLHS);
  
     //gives numLeft-1th pointer
-    lhs.GetKey(numLHS-1, midkey);
+    rc=lhs.GetKey(numLHS-1, midkey);
+    if (rc) { return rc; }
 
     //gives ith pointer to ith key value pair (leaf)
     lhsStart = lhs.ResolveKeyVal(numLHS);
@@ -584,7 +590,8 @@ ERROR_T BTreeIndex::SplitNode (const SIZE_T node, KEY_T &midkey, SIZE_T &newnode
     numLHS = lhs.info.numkeys / 2;
     numRHS = lhs.info.numkeys - numLHS - 1;
 
-    lhs.GetKey(numLHS, midkey);
+    rc=lhs.GetKey(numLHS, midkey);
+    if (rc) { return rc; }
 
     lhsStart = lhs.ResolvePtr(numLHS);
     rhsStart = rhs.ResolvePtr(0);
@@ -616,7 +623,8 @@ ERROR_T BTreeIndex::InsertKeyVal(const SIZE_T node, const KEY_T &key, const VALU
   SIZE_T slotsLeft;
   SIZE_T slotSize;
 
-  b.Unserialize(buffercache, node);
+  rc=b.Unserialize(buffercache, node);
+  if (rc) { return rc; }
   SIZE_T numkeys = b.info.numkeys;
 
   switch (b.info.nodetype) {
