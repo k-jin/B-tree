@@ -113,10 +113,10 @@ public:
   bool NodeFull(const SIZE_T ptr);
   
   //inserts key value pair
-  ERROR_T InsertKeyVal(const SIZE_T node, const KEY_T &key, const VALUE_T &value, SIZE_T newNode);
+  ERROR_T InsertKeyVal(const SIZE_T node, const KEY_T &key, const VALUE_T &value, SIZE_T newnode);
   
   //splits node
-  ERROR_T SplitNode(const SIZE_T node, KEY_T &splitkey, SIZE_T &newnode);  
+  ERROR_T SplitNode(const SIZE_T node, KEY_T &midkey, SIZE_T &newnode);  
 
   // return zero on success
   // return ERROR_NONEXISTENT  if the key doesn't exist
