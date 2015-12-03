@@ -515,16 +515,26 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
 }
 
 
-bool BTreeIndex::NodeFull(const SIZE_T ptr){
+bool BTreeIndex::NodeFull(const SIZE_T node){
+  
+  // Unserialize node pointer
   BTreeNode b;
-  b.Unserialize(buffercache, ptr);
+  b.Unserialize(buffercache, node);
+  SIZE_T full;  
 
+  // Switch based on node type
+  // Consider root as interior node
+  // Interiors, check that total slots are less than 2/3 full
+  // Leafs, check that total slots are less than 2/3 full
   switch(b.info.nodetype){
     case BTREE_ROOT_NODE:
     case BTREE_INTERIOR_NODE:
-      return (b.info.GetNumSlotsAsInterior() == b.info.numkeys);
+	full = 2 / 3 * b.info.GetNumSlotsAsInterior();
+	return (full >= b.info.numkeys);
     case BTREE_LEAF_NODE:
-      return (b.info.GetNumSlotsAsLeaf() == b.info.numkeys);
+	full = 2 / 3 * b.info.GetNumSlotsAsLeaf();
+	return (full >= b.info.numkeys);
+
   }
   return false;
 
@@ -780,8 +790,12 @@ ERROR_T BTreeIndex::SanityCheck() const
     cout << "Root error" << endl;
     return ERROR_NONEXISTANT;
   }
+  
 
+  
   return ERROR_NOERROR;
+  
+
 }
   
 
