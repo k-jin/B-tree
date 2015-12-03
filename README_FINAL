@@ -1,6 +1,7 @@
 Team Members: Jeanette Pranin (jrp338) and Kevin Jin (kqj094)
 
-What works (hopefully): Update, Display, Insert, SplitNode
-What doesn't work:
+What works (hopefully): Update, Display, Insert, SplitNode, SanityCheck (size works)
+What doesn't work: SanityCheck(balanced)
+What we're unsure if works or not: SanityCheck(in order)
 
 Extra credit?: None
