@@ -794,11 +794,11 @@ ERROR_T BTreeIndex::SanityCheck() const
      cout << "Superblock is not first block" << endl;
      return ERROR_NONEXISTENT;
   }
-/*
+
   SIZE_T keySize = superblock.info.keysize;
   SIZE_T valSize = superblock.info.valuesize;
   SIZE_T blockSize = superblock.info.blocksize;
-  */
+  
   BTreeNode root;
   rc = root.Unserialize(buffercache, superblock.info.rootnode); 
 
@@ -843,18 +843,20 @@ ERROR_T SanityHelper(const SIZE_T &node, const SIZE_T keysize, const SIZE_T valu
   }
 
   switch(b.info.nodetype) {
-    BTREE_ROOT_NODE:
-    BTREE_INTERIOR_NODE:
+    case BTREE_ROOT_NODE:
+    case BTREE_INTERIOR_NODE:
       for (offset = 0; offset <= b.info.numkeys; offset++) {
 	rc = SanityHelper(b.GetPtr(offset,ptr_or_val), keysize, valuesize, blocksize);
 	if (rc != ERROR_NOERROR) { return rc; }
     }
       break;
-    BTREE_LEAF_NODE:
+    case BTREE_LEAF_NODE:
       for (offset = 0; offset <= b.info.numkeys; offset++) {
 	rc = b.GetVal(offset, ptr_or_val);
 	if (rc != ERROR_NOERROR) {return rc;}
       }
+      break;
+   }
   return ERROR_NOERROR;
 }
 
