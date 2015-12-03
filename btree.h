@@ -135,10 +135,10 @@ public:
   // Here you should figure out if your index makes sense
   // Is it a tree?  Is it in order?  Is it balanced?  Does each node have
   // a valid use ratio?
-  ERROR_T SanityCheck(); // const;
+  ERROR_T SanityCheck() const;
 
 
-  ERROR_T SanityHelper(const SIZE_T &node, const SIZE_T keysize, const SIZE_T valuesize, const SIZE_T blocksize);
+  ERROR_T SanityHelper(const SIZE_T &node, const SIZE_T keysize, const SIZE_T valuesize, const SIZE_T blocksize) const;
   // Display tree
   // BTREE_DEPTH means to do a depth first traversal of 
   // the tree, printing each node

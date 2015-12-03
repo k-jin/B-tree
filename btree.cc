@@ -411,6 +411,7 @@ ERROR_T BTreeIndex::Insert(const KEY_T &key, const VALUE_T &value)
   }
   //key already exists
   else { return ERROR_CONFLICT; }
+  return ERROR_INSANE;
 }
 
  
@@ -780,7 +781,7 @@ ERROR_T BTreeIndex::Display(ostream &o, BTreeDisplayType display_type) const
 }
 
 
-ERROR_T BTreeIndex::SanityCheck() //const
+ERROR_T BTreeIndex::SanityCheck() const
 {
   BTreeNode sb; 
   sb.Unserialize(buffercache, 0);
@@ -811,14 +812,14 @@ ERROR_T BTreeIndex::SanityCheck() //const
 
 }
   
-ERROR_T BTreeIndex::SanityHelper(const SIZE_T &node, const SIZE_T keysize, const SIZE_T valuesize, const SIZE_T blocksize) {
+ERROR_T BTreeIndex::SanityHelper(const SIZE_T &node, const SIZE_T keysize, const SIZE_T valuesize, const SIZE_T blocksize) const{
 
   BTreeNode b;
   SIZE_T offset;
   SIZE_T rc;
   SIZE_T ptr;
   VALUE_T val;
-
+  SIZE_T full; 
 
   b.Unserialize(buffercache, node);
 
@@ -834,7 +835,19 @@ ERROR_T BTreeIndex::SanityHelper(const SIZE_T &node, const SIZE_T keysize, const
     cout << "blocksize error on node: " << node << endl;
     return ERROR_BADCONFIG;
   }
-
+  
+  switch(b.info.nodetype){
+    case BTREE_ROOT_NODE:
+    case BTREE_INTERIOR_NODE:
+	full = (2 / 3) * b.info.GetNumSlotsAsInterior();
+	break;
+    case BTREE_LEAF_NODE:
+	full = (2 / 3) * b.info.GetNumSlotsAsLeaf();
+	break;
+  }
+  if (full < b.info.numkeys) {
+	return ERROR_NOSPACE;
+  }
   switch(b.info.nodetype) {
     case BTREE_ROOT_NODE:
     case BTREE_INTERIOR_NODE:
