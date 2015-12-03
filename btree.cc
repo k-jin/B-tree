@@ -588,67 +588,76 @@ ERROR_T BTreeIndex::SplitNode (const SIZE_T node, KEY_T &splitkey, SIZE_T &newno
 
 ERROR_T BTreeIndex::InsertKeyVal(const SIZE_T node, const KEY_T &key, const VALUE_T &value, SIZE_T newnode) {
   BTreeNode b;
-  b.Unserialize(buffercache, node);
   KEY_T testKey;
-  SIZE_T entriesToCopy;
-  SIZE_T numKeys = b.info.numkeys;
-  SIZE_T i;
   ERROR_T rc;
-  SIZE_T entrySize;
+
+  SIZE_T slotsLeft;
+  SIZE_T slotSize;
+
+  b.Unserialize(buffercache, node);
+  SIZE_T numkeys = b.info.numkeys;
 
   switch (b.info.nodetype) {
-
     case BTREE_ROOT_NODE:
     case BTREE_INTERIOR_NODE:
       //size of key ptr pair
-      entrySize = b.info.keysize + sizeof(SIZE_T);
+      slotSize = b.info.keysize + sizeof(SIZE_T);
       break;
     case BTREE_LEAF_NODE:
       //size of key value pair
-      entrySize = b.info.keysize + b.info.valuesize;
+      slotSize = b.info.keysize + b.info.valuesize;
       break;
     default:
       return ERROR_INSANE;
   }
 
+  //we're adding a new key
   b.info.numkeys++;
-  if (numKeys > 0) {
-    for (i=0, entriesToCopy = numKeys; i < numKeys; i++, entriesToCopy--) {
-      if ((rc = b.GetKey(i,testKey))) {
-         return rc;
-      }
+
+  if (numkeys > 0) {
+    slotsLeft = numkeys;
+    for (SIZE_T i=0; i < numkeys; i++) {
+      rc = b.GetKey(i, testKey);
+      if (rc) { return rc; }
+
       if (key < testKey) {
+        //we're going to move existing data over one
         void *src = b.ResolveKey(i);
 	void *dest = b.ResolveKey(i+1);
-	memmove(dest, src, entriesToCopy * entrySize);
-	if (b.info.nodetype == BTREE_LEAF_NODE) {
-	  if ((rc = b.SetKey(i, key)) || (rc = b.SetVal(i, value))) {
-	    return rc;
-	  }
-	} else {
-	  if ((rc = b.SetKey(i, key)) || (rc = b.SetPtr(i + 1, newnode))) {
-	    return rc;
-	  }
-	}
-	break;
-      }
-      if (i == (numKeys - 1)) {
-	if (b.info.nodetype == BTREE_LEAF_NODE) {
-	  if ((rc = b.SetKey(numKeys, key)) || (rc = b.SetVal(numKeys, value))) {
-	    return rc;
-	  }
-	} else {
-	  if ((rc = b.SetKey(numKeys, key)) || (rc = b.SetPtr(numKeys + 1, newnode))) {
-	    return rc;
-	  }
-	}
-	break;
+        //memmove(destination, source, num_bytes)
+        //dest = pointer to dest array where content is copies
+        //src = pointer to src of data to be copied
+	memmove(dest, src, slotsLeft * slotSize);
       }
 
+      //we want it to point to last key
+      if (i == (numkeys - 1)) { i = numkeys; }
+
+      //set key no matter what type of node
+      rc = b.SetKey(i,key);
+      if (rc) { return rc; }
+      if (b.info.nodetype == BTREE_LEAF_NODE) {
+        //if it's a leaf node, it needs a key val pair
+        rc = b.SetVal(i, value);
+        if (rc) { return rc; }
+      } else {
+        //otherwise it's a key ptr pair
+        rc = b.SetPtr(i+1, newnode);
+        if(rc) { return rc; }
+      }
+      break;
     }
-  } else if ((rc = b.SetKey(0, key)) || (rc = b.SetVal(0, value))) {
-    return rc;
+    slotsLeft--;
   }
+  //there was nothing on the node, that's easy 
+  else {
+    rc = b.SetKey(0, key);
+    if (rc) { return rc; }
+ 
+    rc = b.SetVal(0, value);
+    if (rc) { return rc; }
+  }
+  //write back onto disk
   return b.Serialize(buffercache, node);
 
 }
