@@ -4,4 +4,6 @@ What works (hopefully): Update, Display, Insert, SplitNode, SanityCheck (size wo
 What doesn't work: SanityCheck(balanced)
 What we're unsure if works or not: SanityCheck(in order)
 
+For SanityCheck in order, we have code but we couldn't test it. It is commented in the file attached. Please look that over as well.
+
 Extra credit?: None
