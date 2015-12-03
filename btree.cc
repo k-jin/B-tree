@@ -2,7 +2,7 @@
 #include "btree.h"
 #include <stdio.h>
 #include <string.h>
-
+#include <limits.h>
 using namespace std;
 
 KeyValuePair::KeyValuePair()
@@ -784,8 +784,13 @@ ERROR_T BTreeIndex::Display(ostream &o, BTreeDisplayType display_type) const
 ERROR_T BTreeIndex::SanityCheck() const
 {
   BTreeNode sb; 
+  // Unsure if in range works, see commented code and
+  // commented version of SanityHelper BELOW
+  // KEY_T min;
   sb.Unserialize(buffercache, 0);
   
+  // Check if superblock is in it's proper place 
+  // and grab superblock info to check with rest of tree 
   if (sb.info.nodetype != BTREE_SUPERBLOCK) {
      cout << "Superblock is not first block" << endl;
      return ERROR_NONEXISTENT;
@@ -795,24 +800,108 @@ ERROR_T BTreeIndex::SanityCheck() const
   SIZE_T valSize = sb.info.valuesize;
   SIZE_T blockSize = sb.info.blocksize;
   
+
+  // Check if root is in it's proper place
   BTreeNode root;
   root.Unserialize(buffercache, sb.info.rootnode); 
-
-
 
   if (root.info.nodetype != BTREE_ROOT_NODE) { 
     cout << "Root error" << endl;
     return ERROR_NONEXISTENT;
   }
-  
 
-  
+  // Call SanityHelper for recursion on root  
   return SanityHelper(sb.info.rootnode, keySize, valSize, blockSize);
-  
+  // return SanityHelper(sb.info.rootnode, keySize, valSize, blockSize, min);
 
 }
-  
+ 
+
+// Recursive Helper function for Sanity Check
+
 ERROR_T BTreeIndex::SanityHelper(const SIZE_T &node, const SIZE_T keysize, const SIZE_T valuesize, const SIZE_T blocksize) const{
+
+
+  BTreeNode b; 		// current unserialized node
+  SIZE_T offset;	// offset for looping through keys
+  ERROR_T rc;		// error tracker
+  SIZE_T ptr;		// current pointer if interior node
+  VALUE_T val;		// current value if leaf
+  SIZE_T full; 		// size limit of current node
+
+  b.Unserialize(buffercache, node);
+
+  // Checking each blocks keysize, valuesize, and blocksize
+  if (keysize != b.info.keysize) {
+    cout << "keysize error on node: " << node << endl;
+    return ERROR_BADCONFIG;
+  }
+  if (valuesize != b.info.valuesize) {
+    cout << "valuesize error on node: " << node << endl;
+    return ERROR_BADCONFIG;
+  }
+  if (blocksize != b.info.blocksize) {
+    cout << "blocksize error on node: " << node << endl;
+    return ERROR_BADCONFIG;
+  }
+  
+  // Set full based on node type
+  switch(b.info.nodetype){
+    case BTREE_ROOT_NODE:
+    case BTREE_INTERIOR_NODE:
+	full = (2 / 3) * b.info.GetNumSlotsAsInterior();
+	break;
+    case BTREE_LEAF_NODE:
+	full = (2 / 3) * b.info.GetNumSlotsAsLeaf();
+	break;
+  }
+  // Make sure that no block is over the limit
+  if (full < b.info.numkeys) {
+	return ERROR_NOSPACE;
+  }
+  // Check that pointers and values at each node is valid
+  // If Interior node, recurse on all pointers in node
+  // If leaf, check that all values are valid
+  switch(b.info.nodetype) {
+    case BTREE_ROOT_NODE:
+    case BTREE_INTERIOR_NODE:
+      for (offset = 0; offset <= b.info.numkeys; offset++) {
+	rc = b.GetPtr(offset, ptr);
+	if (rc) { return rc; }
+	rc = SanityHelper(ptr, keysize, valuesize, blocksize);
+	if (rc) { return rc; }
+    }
+      break;
+    case BTREE_LEAF_NODE:
+      for (offset = 0; offset <= b.info.numkeys; offset++) {
+	rc = b.GetVal(offset, val);
+	if (rc) {return rc;}
+      }
+      break;
+   }
+  // If everything works with no errors, then return no error
+  return ERROR_NOERROR;
+}
+
+//BELOW:
+// This is our implementation of SanityHelper that would 
+// check to make sure the tree is in order
+// To do this, we pass in the minimum key for each block and 
+// then we set the previous key, prevKey to min. Then we go to the switch 
+// statement for each nodetype. 
+// For interior node:
+// At each iteration, get the current key and
+// set it to currKey. Make sure that it is larger prevKey. If not, return an error
+// Else, update prevKey to currKey and recursively call SanityHelper with the 
+// new prevKey. Continue iterating through the current node after the recursive call
+// For leaf nodes:
+// At each iteration, do the same as interior node but without the recursive call
+// Make sure that currKey is always larger than prevKey
+//
+// The reason why we didn't implement this is because we were unsure how to set the very initial value of the prevKey when we make the first call to SanityHelper. We didn't have time to test it so we're unsure about this portion
+
+/*
+ERROR_T BTreeIndex::SanityHelper(const SIZE_T &node, const SIZE_T keysize, const SIZE_T valuesize, const SIZE_T blocksize, const KEY_T min) const{
 
   BTreeNode b;
   SIZE_T offset;
@@ -820,6 +909,8 @@ ERROR_T BTreeIndex::SanityHelper(const SIZE_T &node, const SIZE_T keysize, const
   SIZE_T ptr;
   VALUE_T val;
   SIZE_T full; 
+  KEY_T currKey;
+  KEY_T prevKey = min;
 
   b.Unserialize(buffercache, node);
 
@@ -846,28 +937,43 @@ ERROR_T BTreeIndex::SanityHelper(const SIZE_T &node, const SIZE_T keysize, const
 	break;
   }
   if (full < b.info.numkeys) {
-	return ERROR_NOSPACE;
+	return ERROR_SIZE;
   }
   switch(b.info.nodetype) {
     case BTREE_ROOT_NODE:
     case BTREE_INTERIOR_NODE:
       for (offset = 0; offset <= b.info.numkeys; offset++) {
 	rc = b.GetPtr(offset, ptr);
-	if (!rc) { return rc; }
-	rc = SanityHelper(ptr, keysize, valuesize, blocksize);
-	if (!rc) { return rc; }
+	if (rc) { return rc; }
+	rc = b.GetKey(offset, currKey);
+	if (rc) { return rc; }
+	if (currKey < prevKey) {
+	  cout << "key: " << currKey << " is out of order" << endl;   
+	  return ERROR_BADCONFIG;
+	}
+	prevKey = currKey;
+	rc = SanityHelper(ptr, keysize, valuesize, blocksize, prevKey);
+	if (rc) { return rc; }
     }
       break;
     case BTREE_LEAF_NODE:
       for (offset = 0; offset <= b.info.numkeys; offset++) {
+	rc = b.GetKey(offset, currKey);
+	if (rc) { return rc; }
+	if (currKey < prevKey) {
+	  cout << "key: " << currKey << " is out of order" << endl;   
+	  return ERROR_BADCONFIG;
+	}
+	prevKey = currKey;
+	
 	rc = b.GetVal(offset, val);
-	if (!rc) {return rc;}
+	if (rc) {return rc;}
       }
       break;
    }
   return ERROR_NOERROR;
 }
-
+*/
 ostream & BTreeIndex::Print(ostream &os) const
 {
   Display(os, BTREE_DEPTH_DOT);
