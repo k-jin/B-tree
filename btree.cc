@@ -752,6 +752,35 @@ ERROR_T BTreeIndex::Display(ostream &o, BTreeDisplayType display_type) const
 ERROR_T BTreeIndex::SanityCheck() const
 {
   // WRITE ME
+  BTreeNode superblock;
+  ERROR_T rc;
+  rc = superblock.Unserialize(buffercache, 0);
+  
+  if (rc != ERROR_NOERROR) {
+    return rc;
+  }
+
+  if (superblock.info.nodetype != BTREE_SUPERBLOCK) {
+     cout << "Superblock is not first block" << endl;
+     return ERROR_NONEXISTANT;
+  }
+
+  SIZE_T keySize = superblock.info.keysize;
+  SIZE_T valSize = superblock.info.valuesize;
+  SIZE_T blockSize = superblock.info.blocksize;
+  
+  BTreeNode root;
+  rc = root.Unserialize(buffercache, superblock.info.rootnode) 
+
+  if (rc != ERROR_NOERROR) { 
+    return rc;
+  }
+
+  if (root.info.nodetype != BTREE_ROOT_NODE) { 
+    cout << "Root error" << endl;
+    return ERROR_NONEXISTANT;
+  }
+
   return ERROR_NOERROR;
 }
   
