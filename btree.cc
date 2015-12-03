@@ -515,16 +515,26 @@ ERROR_T BTreeIndex::InsertHelper(const SIZE_T &node, const KEY_T &key, const VAL
 }
 
 
-bool BTreeIndex::NodeFull(const SIZE_T ptr){
+bool BTreeIndex::NodeFull(const SIZE_T node){
+  
+  // Unserialize node pointer
   BTreeNode b;
-  b.Unserialize(buffercache, ptr);
+  b.Unserialize(buffercache, node);
+  SIZE_T full;  
 
+  // Switch based on node type
+  // Consider root as interior node
+  // Interiors, check that total slots are less than 2/3 full
+  // Leafs, check that total slots are less than 2/3 full
   switch(b.info.nodetype){
     case BTREE_ROOT_NODE:
     case BTREE_INTERIOR_NODE:
-      return (b.info.GetNumSlotsAsInterior() == b.info.numkeys);
+	full = 2 / 3 * b.info.GetNumSlotsAsInterior();
+	return (full >= b.info.numkeys);
     case BTREE_LEAF_NODE:
-      return (b.info.GetNumSlotsAsLeaf() == b.info.numkeys);
+	full = 2 / 3 * b.info.GetNumSlotsAsLeaf();
+	return (full >= b.info.numkeys);
+
   }
   return false;
 
@@ -761,7 +771,40 @@ ERROR_T BTreeIndex::Display(ostream &o, BTreeDisplayType display_type) const
 ERROR_T BTreeIndex::SanityCheck() const
 {
   // WRITE ME
+  BTreeNode superblock;
+  ERROR_T rc;
+  rc = superblock.Unserialize(buffercache, 0);
+  
+  if (rc != ERROR_NOERROR) {
+    return rc;
+  }
+
+  if (superblock.info.nodetype != BTREE_SUPERBLOCK) {
+     cout << "Superblock is not first block" << endl;
+     return ERROR_NONEXISTANT;
+  }
+
+  SIZE_T keySize = superblock.info.keysize;
+  SIZE_T valSize = superblock.info.valuesize;
+  SIZE_T blockSize = superblock.info.blocksize;
+  
+  BTreeNode root;
+  rc = root.Unserialize(buffercache, superblock.info.rootnode) 
+
+  if (rc != ERROR_NOERROR) { 
+    return rc;
+  }
+
+  if (root.info.nodetype != BTREE_ROOT_NODE) { 
+    cout << "Root error" << endl;
+    return ERROR_NONEXISTANT;
+  }
+  
+
+  
   return ERROR_NOERROR;
+  
+
 }
   
 
