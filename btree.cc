@@ -780,31 +780,24 @@ ERROR_T BTreeIndex::Display(ostream &o, BTreeDisplayType display_type) const
 }
 
 
-ERROR_T BTreeIndex::SanityCheck() const
+ERROR_T BTreeIndex::SanityCheck() //const
 {
-  BTreeNode superblock;
-  ERROR_T rc;
-  rc = superblock.Unserialize(buffercache, 0);
+  BTreeNode sb; 
+  sb.Unserialize(buffercache, 0);
   
-  if (rc != ERROR_NOERROR) {
-    return rc;
-  }
-
-  if (superblock.info.nodetype != BTREE_SUPERBLOCK) {
+  if (sb.info.nodetype != BTREE_SUPERBLOCK) {
      cout << "Superblock is not first block" << endl;
      return ERROR_NONEXISTENT;
   }
 
-  SIZE_T keySize = superblock.info.keysize;
-  SIZE_T valSize = superblock.info.valuesize;
-  SIZE_T blockSize = superblock.info.blocksize;
+  SIZE_T keySize = sb.info.keysize;
+  SIZE_T valSize = sb.info.valuesize;
+  SIZE_T blockSize = sb.info.blocksize;
   
   BTreeNode root;
-  rc = root.Unserialize(buffercache, superblock.info.rootnode); 
+  root.Unserialize(buffercache, sb.info.rootnode); 
 
-  if (rc != ERROR_NOERROR) { 
-    return rc;
-  }
+
 
   if (root.info.nodetype != BTREE_ROOT_NODE) { 
     cout << "Root error" << endl;
@@ -813,22 +806,22 @@ ERROR_T BTreeIndex::SanityCheck() const
   
 
   
-  return SanityHelper(superblock.info.rootnode, keySize, valSize, blockSize);
+  return SanityHelper(sb.info.rootnode, keySize, valSize, blockSize);
   
 
 }
   
-ERROR_T SanityHelper(const SIZE_T &node, const SIZE_T keysize, const SIZE_T valuesize, const SIZE_T blocksize) {
+ERROR_T BTreeIndex::SanityHelper(const SIZE_T &node, const SIZE_T keysize, const SIZE_T valuesize, const SIZE_T blocksize) {
 
   BTreeNode b;
   SIZE_T offset;
   SIZE_T rc;
-  SIZE_T ptr_or_val;
+  SIZE_T ptr;
+  VALUE_T val;
 
 
-  rc = b.Unserialize(buffercache, node);
+  b.Unserialize(buffercache, node);
 
-  if (rc != ERROR_NOERROR) { return rc; }
   if (keysize != b.info.keysize) {
     cout << "keysize error on node: " << node << endl;
     return ERROR_BADCONFIG;
@@ -846,14 +839,16 @@ ERROR_T SanityHelper(const SIZE_T &node, const SIZE_T keysize, const SIZE_T valu
     case BTREE_ROOT_NODE:
     case BTREE_INTERIOR_NODE:
       for (offset = 0; offset <= b.info.numkeys; offset++) {
-	rc = SanityHelper(b.GetPtr(offset,ptr_or_val), keysize, valuesize, blocksize);
-	if (rc != ERROR_NOERROR) { return rc; }
+	rc = b.GetPtr(offset, ptr);
+	if (!rc) { return rc; }
+	rc = SanityHelper(ptr, keysize, valuesize, blocksize);
+	if (!rc) { return rc; }
     }
       break;
     case BTREE_LEAF_NODE:
       for (offset = 0; offset <= b.info.numkeys; offset++) {
-	rc = b.GetVal(offset, ptr_or_val);
-	if (rc != ERROR_NOERROR) {return rc;}
+	rc = b.GetVal(offset, val);
+	if (!rc) {return rc;}
       }
       break;
    }
