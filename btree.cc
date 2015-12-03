@@ -793,12 +793,50 @@ ERROR_T BTreeIndex::SanityCheck() const
   
 
   
-  return ERROR_NOERROR;
+  return SanityHelper(superblock.info.rootnode, keySize, valSize, blockSize);
   
 
 }
   
+ERROR_T SanityHelper(const SIZE_T &node, const SIZE_T keysize, const SIZE_T valuesize, const SIZE_T blocksize) {
 
+  BTreeNode b;
+  SIZE_T offset;
+  SIZE_T rc;
+  SIZE_T ptr_or_val;
+
+
+  rc = b.Unserialize(buffercache, node);
+
+  if (rc != ERROR_NOERROR) { return rc; }
+  if (keysize != b.info.keysize) {
+    cout << "keysize error on node: " << node << endl;
+    return ERROR_BADCONFIG;
+  }
+  if (valuesize != b.info.valuesize) {
+    cout << "valuesize error on node: " << node << endl;
+    return ERROR_BADCONFIG;
+  }
+  if (blocksize != b.info.blocksize) {
+    cout << "blocksize error on node: " << node << endl;
+    return ERROR_BADCONFIG;
+  }
+
+  switch(b.info.nodetype) {
+    BTREE_ROOT_NODE:
+    BTREE_INTERIOR_NODE:
+      for (offset = 0; offset <= b.info.numkeys; offset++) {
+	rc = SanityHelper(b.GetPtr(offset,ptr_or_val), keysize, valuesize, blocksize);
+	if (rc != ERROR_NOERROR) { return rc; }
+    }
+      break;
+    BTREE_LEAF_NODE:
+      for (offset = 0; offset <= b.info.numkeys; offset++) {
+	rc = b.GetVal(offset, ptr_or_val);
+	if (rc != ERROR_NOERROR) {return rc;}
+      }
+  return ERROR_NOERROR;
+}
 
 ostream & BTreeIndex::Print(ostream &os) const
 {
