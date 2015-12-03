@@ -530,10 +530,10 @@ bool BTreeIndex::NodeFull(const SIZE_T node){
     case BTREE_ROOT_NODE:
     case BTREE_INTERIOR_NODE:
 	full = 2 / 3 * b.info.GetNumSlotsAsInterior();
-	return (full >= b.info.numkeys);
+	return (full <= b.info.numkeys);
     case BTREE_LEAF_NODE:
 	full = 2 / 3 * b.info.GetNumSlotsAsLeaf();
-	return (full >= b.info.numkeys);
+	return (full <= b.info.numkeys);
 
   }
   return false;
